@@ -1,0 +1,137 @@
+name: Build
+
+on:
+  push:
+    tags:
+      - 'v*'
+  pull_request:
+
+jobs:
+  build-linux-x86_64:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt
+        uses: qt-actions/install-qt@v2
+        with:
+          version: '6.7.0'
+
+      - name: Build
+        run: |
+          mkdir build && cd build
+          qmake ../mcfc-to-json.pro
+          make -j$(nproc)
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-x86_64
+          path: build/mcfc-to-json
+
+  build-linux-aarch64:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install cross-compile tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu qt6-base-dev-arm64-cross qt6-multimedia-dev-arm64-cross
+
+      - name: Build
+        run: |
+          mkdir build && cd build
+          aarch64-linux-gnu-qmake6 ../mcfc-to-json.pro
+          make -j$(nproc)
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-aarch64
+          path: build/mcfc-to-json
+
+  build-macos-x86_64:
+    runs-on: macos-13
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt
+        uses: qt-actions/install-qt@v2
+        with:
+          version: '6.7.0'
+
+      - name: Build
+        run: |
+          mkdir build && cd build
+          qmake ../mcfc-to-json.pro
+          make -j$(nproc)
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-x86_64
+          path: build/mcfc-to-json.app
+
+  build-macos-aarch64:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt
+        uses: qt-actions/install-qt@v2
+        with:
+          version: '6.7.0'
+
+      - name: Build
+        run: |
+          mkdir build && cd build
+          qmake ../mcfc-to-json.pro
+          make -j$(nproc)
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-aarch64
+          path: build/mcfc-to-json.app
+
+  build-windows-x86_64:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt
+        uses: qt-actions/install-qt@v2
+        with:
+          version: '6.7.0'
+
+      - name: Build
+        run: |
+          mkdir build
+          cd build
+          qmake ..\mcfc-to-json.pro
+          mingw32-make -j$env:NUMBER_OF_PROCESSORS
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-x86_64
+          path: build/mcfc-to-json.exe
+
+  release:
+    needs: [build-linux-x86_64, build-linux-aarch64, build-macos-x86_64, build-macos-aarch64, build-windows-x86_64]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: artifacts/**/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
