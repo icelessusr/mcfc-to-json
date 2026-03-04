@@ -19,15 +19,42 @@ jobs:
 
       - name: Build
         run: |
-          mkdir build && cd build
+          mkdir -p build && cd build
           qmake ../mcfc-to-json.pro
           make -j$(nproc)
+
+      - name: Package AppImage
+        run: |
+          cd build
+          mkdir -p mcfc-to-json/usr/bin
+          cp mcfc-to-json mcfc-to-json/usr/bin/
+          cat > mcfc-to-json/AppRun << 'EOF'
+          #!/bin/bash
+          exec "$(dirname "$0")/mcfc-to-json" "$@"
+          EOF
+          chmod +x mcfc-to-json/AppRun
+          cat > mcfc-to-json/mcfc-to-json.desktop << 'EOF'
+          [Desktop Entry]
+          Type=Application
+          Name=mcfc-to-json
+          Exec=mcfc-to-json
+          EOF
+          wget -q https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage -O appimagetool
+          chmod +x appimagetool
+          ./appimagetool mcfc-to-json mcfc-to-json.AppImage
+
+      - name: Package tar.gz
+        run: |
+          cd build
+          tar -czvf mcfc-to-json-linux-x86_64.tar.gz mcfc-to-json
 
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
           name: linux-x86_64
-          path: build/mcfc-to-json
+          path: |
+            build/mcfc-to-json.AppImage
+            build/mcfc-to-json-linux-x86_64.tar.gz
 
   build-linux-aarch64:
     runs-on: ubuntu-22.04
@@ -41,15 +68,20 @@ jobs:
 
       - name: Build
         run: |
-          mkdir build && cd build
+          mkdir -p build && cd build
           aarch64-linux-gnu-qmake6 ../mcfc-to-json.pro
           make -j$(nproc)
+
+      - name: Package tar.gz
+        run: |
+          cd build
+          tar -czvf mcfc-to-json-linux-aarch64.tar.gz mcfc-to-json
 
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
           name: linux-aarch64
-          path: build/mcfc-to-json
+          path: build/mcfc-to-json-linux-aarch64.tar.gz
 
   build-macos-x86_64:
     runs-on: macos-13
@@ -63,15 +95,31 @@ jobs:
 
       - name: Build
         run: |
-          mkdir build && cd build
+          mkdir -p build && cd build
           qmake ../mcfc-to-json.pro
           make -j$(nproc)
+
+      - name: Package dmg
+        run: |
+          cd build
+          mkdir -p mcfc-to-json.app/Contents/MacOS
+          cp -r mcfc-to-json.app/Contents . || true
+          cp mcfc-to-json mcfc-to-json.app/Contents/MacOS/
+          # Create dmg
+          hdiutil create -volname mcfc-to-json -srcfolder mcfc-to-json.app -ov -format UDZO mcfc-to-json-x86_64.dmg
+
+      - name: Package tar.gz
+        run: |
+          cd build
+          tar -czvf mcfc-to-json-macos-x86_64.tar.gz mcfc-to-json.app
 
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
           name: macos-x86_64
-          path: build/mcfc-to-json.app
+          path: |
+            build/mcfc-to-json-x86_64.dmg
+            build/mcfc-to-json-macos-x86_64.tar.gz
 
   build-macos-aarch64:
     runs-on: macos-14
@@ -85,15 +133,30 @@ jobs:
 
       - name: Build
         run: |
-          mkdir build && cd build
+          mkdir -p build && cd build
           qmake ../mcfc-to-json.pro
           make -j$(nproc)
+
+      - name: Package dmg
+        run: |
+          cd build
+          mkdir -p mcfc-to-json.app/Contents/MacOS
+          cp -r mcfc-to-json.app/Contents . || true
+          cp mcfc-to-json mcfc-to-json.app/Contents/MacOS/
+          hdiutil create -volname mcfc-to-json -srcfolder mcfc-to-json.app -ov -format UDZO mcfc-to-json-aarch64.dmg
+
+      - name: Package tar.gz
+        run: |
+          cd build
+          tar -czvf mcfc-to-json-macos-aarch64.tar.gz mcfc-to-json.app
 
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
           name: macos-aarch64
-          path: build/mcfc-to-json.app
+          path: |
+            build/mcfc-to-json-aarch64.dmg
+            build/mcfc-to-json-macos-aarch64.tar.gz
 
   build-windows-x86_64:
     runs-on: windows-latest
@@ -112,11 +175,16 @@ jobs:
           qmake ..\mcfc-to-json.pro
           mingw32-make -j$env:NUMBER_OF_PROCESSORS
 
+      - name: Package zip
+        run: |
+          cd build
+          powershell -Command "Compress-Archive -Path mcfc-to-json.exe -DestinationPath mcfc-to-json-windows-x86_64.zip -Force"
+
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
           name: windows-x86_64
-          path: build/mcfc-to-json.exe
+          path: build/mcfc-to-json-windows-x86_64.zip
 
   release:
     needs: [build-linux-x86_64, build-linux-aarch64, build-macos-x86_64, build-macos-aarch64, build-windows-x86_64]
